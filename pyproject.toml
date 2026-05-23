@@ -1,0 +1,31 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "rpm-version"
+dynamic = ["version"]
+description = "A library for dealing with RPM versions (NEVRA, EVR) correctly. Python bindings for the Rust crate rpm-version"
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.10"
+keywords = ["rpm", "packaging"]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Archiving :: Packaging",
+]
+authors = [
+  {name = "Daniel Alley", email = "dalley@redhat.com"},
+]
+
+[project.urls]
+Homepage = "https://github.com/rpm-rs/rpm-version"
+Repository = "https://github.com/rpm-rs/rpm-version"
+
+[tool.maturin]
+# Enable the `python` feature (includes pyo3/extension-module).
+features = ["python"]
+# The Python module name — must match the #[pymodule] fn name in src/python.rs.
+module-name = "rpm_version"
