@@ -242,6 +242,21 @@ impl<'a> Evr<'a> {
         &self.release
     }
 
+    /// Set the epoch value
+    pub fn set_epoch(&mut self, epoch: impl Into<Cow<'a, str>>) {
+        self.epoch = epoch.into();
+    }
+
+    /// Set the version value
+    pub fn set_version(&mut self, version: impl Into<Cow<'a, str>>) {
+        self.version = version.into();
+    }
+
+    /// Set the release value
+    pub fn set_release(&mut self, release: impl Into<Cow<'a, str>>) {
+        self.release = release.into();
+    }
+
     /// Write an EVR string in a normalized form which always includes an epoch
     ///
     /// The standard string representation of an EVR will ignore the epoch if not set.  A package

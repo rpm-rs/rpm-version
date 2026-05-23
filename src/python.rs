@@ -26,9 +26,10 @@ impl<'a> From<crate::Evr<'a>> for PyEvr {
 impl PyEvr {
     /// Construct an Evr from its three components.
     #[new]
-    fn new(epoch: &str, version: &str, release: &str) -> Self {
+    #[pyo3(signature = (epoch, version, release))]
+    fn new(epoch: Option<&str>, version: &str, release: &str) -> Self {
         PyEvr(crate::Evr::new(
-            epoch.to_owned(),
+            epoch.unwrap_or("").to_owned(),
             version.to_owned(),
             release.to_owned(),
         ))
@@ -111,10 +112,11 @@ impl<'a> From<crate::Nevra<'a>> for PyNevra {
 impl PyNevra {
     /// Construct a Nevra from its five components.
     #[new]
-    fn new(name: &str, epoch: &str, version: &str, release: &str, arch: &str) -> Self {
+    #[pyo3(signature = (name, epoch, version, release, arch))]
+    fn new(name: &str, epoch: Option<&str>, version: &str, release: &str, arch: &str) -> Self {
         PyNevra(crate::Nevra::new(
             name.to_owned(),
-            epoch.to_owned(),
+            epoch.unwrap_or("").to_owned(),
             version.to_owned(),
             release.to_owned(),
             arch.to_owned(),

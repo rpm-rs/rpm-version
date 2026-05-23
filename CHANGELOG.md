@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.3.0
+
+- Added `set_epoch`, `set_version`, and `set_release` methods to `Evr`
+  - Only applies to Rust API
+- Accept `None` in place of `epoch`
+
 ## 0.2.0
 
 - Added `Hash` implementation for `Evr` and `Nevra` (consistent with `PartialEq` epoch normalization)
