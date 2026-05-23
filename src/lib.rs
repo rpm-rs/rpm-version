@@ -473,6 +473,97 @@ pub fn rpm_evr_compare(evr1: &str, evr2: &str) -> Ordering {
     evr1.cmp(&evr2)
 }
 
+/// The comparison operator in an RPM dependency requirement.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum ReqOperator {
+    LT,
+    LE,
+    EQ,
+    GE,
+    GT,
+}
+
+impl fmt::Display for ReqOperator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            ReqOperator::LT => "<",
+            ReqOperator::LE => "<=",
+            ReqOperator::EQ => "=",
+            ReqOperator::GE => ">=",
+            ReqOperator::GT => ">",
+        })
+    }
+}
+
+/// An RPM dependency requirement: a package name with an optional version constraint.
+///
+/// A requirement like `foo >= 1:2.0-1` means "package foo with EVR at least 1:2.0-1".
+/// A requirement with no operator/EVR (just a name) is satisfied by any version.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Requirement<'a> {
+    name: Cow<'a, str>,
+    constraint: Option<(ReqOperator, Evr<'a>)>,
+}
+
+impl<'a> Requirement<'a> {
+    /// Create a requirement with no version constraint (any version satisfies).
+    pub fn new<T: Into<Cow<'a, str>>>(name: T) -> Self {
+        Self {
+            name: name.into(),
+            constraint: None,
+        }
+    }
+
+    /// Create a requirement with a version constraint.
+    pub fn with_constraint<T: Into<Cow<'a, str>>>(name: T, op: ReqOperator, evr: Evr<'a>) -> Self {
+        Self {
+            name: name.into(),
+            constraint: Some((op, evr)),
+        }
+    }
+
+    /// The required package name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// The version constraint, if any.
+    pub fn constraint(&self) -> Option<(ReqOperator, &Evr<'a>)> {
+        self.constraint.as_ref().map(|(op, evr)| (*op, evr))
+    }
+
+    /// Check whether a given package name and EVR satisfy this requirement.
+    pub fn satisfies(&self, name: &str, evr: &Evr) -> bool {
+        if self.name != name {
+            return false;
+        }
+        match &self.constraint {
+            None => true,
+            Some((op, req_evr)) => {
+                let ord = evr.cmp(req_evr);
+                match op {
+                    ReqOperator::LT => ord == Ordering::Less,
+                    ReqOperator::LE => ord != Ordering::Greater,
+                    ReqOperator::EQ => ord == Ordering::Equal,
+                    ReqOperator::GE => ord != Ordering::Less,
+                    ReqOperator::GT => ord == Ordering::Greater,
+                }
+            }
+        }
+    }
+}
+
+impl fmt::Display for Requirement<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.constraint {
+            None => write!(f, "{}", self.name),
+            Some((op, evr)) => write!(f, "{} {} {}", self.name, op, evr),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -1052,5 +1143,47 @@ mod test {
         let json = serde_json::to_string(&nevra).unwrap();
         let nevra2: Nevra = serde_json::from_str(&json).unwrap();
         assert_eq!(nevra, nevra2);
+    }
+
+    #[test]
+    fn test_requirement_no_constraint() {
+        let req = Requirement::new("foo");
+        assert!(req.satisfies("foo", &Evr::parse("1.0-1")));
+        assert!(req.satisfies("foo", &Evr::parse("999.0-1")));
+        assert!(!req.satisfies("bar", &Evr::parse("1.0-1")));
+    }
+
+    #[test]
+    fn test_requirement_eq() {
+        let req = Requirement::with_constraint("foo", ReqOperator::EQ, Evr::parse("1.0-1"));
+        assert!(req.satisfies("foo", &Evr::parse("1.0-1")));
+        assert!(req.satisfies("foo", &Evr::parse("0:1.0-1")));
+        assert!(!req.satisfies("foo", &Evr::parse("1.0-2")));
+        assert!(!req.satisfies("foo", &Evr::parse("2.0-1")));
+    }
+
+    #[test]
+    fn test_requirement_ge() {
+        let req = Requirement::with_constraint("foo", ReqOperator::GE, Evr::parse("1.0-1"));
+        assert!(req.satisfies("foo", &Evr::parse("1.0-1")));
+        assert!(req.satisfies("foo", &Evr::parse("2.0-1")));
+        assert!(!req.satisfies("foo", &Evr::parse("0.9-1")));
+    }
+
+    #[test]
+    fn test_requirement_lt() {
+        let req = Requirement::with_constraint("foo", ReqOperator::LT, Evr::parse("2.0-1"));
+        assert!(req.satisfies("foo", &Evr::parse("1.0-1")));
+        assert!(!req.satisfies("foo", &Evr::parse("2.0-1")));
+        assert!(!req.satisfies("foo", &Evr::parse("3.0-1")));
+    }
+
+    #[test]
+    fn test_requirement_display() {
+        let req = Requirement::new("foo");
+        assert_eq!(req.to_string(), "foo");
+
+        let req = Requirement::with_constraint("foo", ReqOperator::GE, Evr::parse("1:2.0-1"));
+        assert_eq!(req.to_string(), "foo >= 1:2.0-1");
     }
 }

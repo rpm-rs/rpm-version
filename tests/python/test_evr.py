@@ -1,4 +1,4 @@
-"""Tests for Evr, Nevra, and evr_compare."""
+"""Tests for Evr, Nevra, evr_compare, and Requirement."""
 
 from rpm_version import Evr, Nevra, evr_compare
 
@@ -56,6 +56,21 @@ class TestEvr:
         a = Evr.parse("1:1.0-1")
         b = Evr.parse("2:1.0-1")
         assert a < b
+
+    def test_tilde_prerelease(self):
+        """Tilde (~) denotes a pre-release: 1.0~rc1 sorts before 1.0."""
+        assert Evr.parse("1.0~rc1-1") < Evr.parse("1.0-1")
+        assert Evr.parse("1.0~rc1-1") < Evr.parse("1.0~rc2-1")
+
+    def test_caret_snapshot(self):
+        """Caret (^) denotes a post-release snapshot: 1.0^git1 sorts after 1.0 but before 1.1."""
+        assert Evr.parse("1.0-1") < Evr.parse("1.0^git1-1")
+        assert Evr.parse("1.0^git1-1") < Evr.parse("1.1-1")
+
+    def test_tilde_and_caret_combined(self):
+        """Tilde and caret can combine: 1.0~rc1^git1 sorts after 1.0~rc1 but before 1.0."""
+        assert Evr.parse("1.0~rc1-1") < Evr.parse("1.0~rc1^git1-1")
+        assert Evr.parse("1.0~rc1^git1-1") < Evr.parse("1.0-1")
 
 
 class TestEvrCompare:

@@ -7,7 +7,7 @@ name = "rpm-version"
 dynamic = ["version"]
 description = "A library for dealing with RPM versions (NEVRA, EVR) correctly. Python bindings for the Rust crate rpm-version"
 license = { text = "MIT" }
-readme = "README.md"
+readme = "PYTHON_README.md"
 requires-python = ">=3.10"
 keywords = ["rpm", "packaging"]
 classifiers = [

@@ -205,6 +205,134 @@ impl PyNevra {
 }
 
 // ---------------------------------------------------------------------------
+// Requirement
+// ---------------------------------------------------------------------------
+
+/// Comparison operator for an RPM dependency requirement.
+#[pyclass(name = "ReqOperator", frozen, eq, eq_int, hash, from_py_object)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PyReqOperator {
+    LT,
+    LE,
+    EQ,
+    GE,
+    GT,
+}
+
+impl From<PyReqOperator> for crate::ReqOperator {
+    fn from(op: PyReqOperator) -> Self {
+        match op {
+            PyReqOperator::LT => crate::ReqOperator::LT,
+            PyReqOperator::LE => crate::ReqOperator::LE,
+            PyReqOperator::EQ => crate::ReqOperator::EQ,
+            PyReqOperator::GE => crate::ReqOperator::GE,
+            PyReqOperator::GT => crate::ReqOperator::GT,
+        }
+    }
+}
+
+impl From<crate::ReqOperator> for PyReqOperator {
+    fn from(op: crate::ReqOperator) -> Self {
+        match op {
+            crate::ReqOperator::LT => PyReqOperator::LT,
+            crate::ReqOperator::LE => PyReqOperator::LE,
+            crate::ReqOperator::EQ => PyReqOperator::EQ,
+            crate::ReqOperator::GE => PyReqOperator::GE,
+            crate::ReqOperator::GT => PyReqOperator::GT,
+        }
+    }
+}
+
+/// Accepts either a string (`"<"`, `"<="`, `"="`, `">="`, `">"`) or a `ReqOperator` enum value.
+#[derive(FromPyObject)]
+enum OpArg {
+    Enum(PyReqOperator),
+    Str(String),
+}
+
+impl OpArg {
+    fn into_req_operator(self) -> PyResult<crate::ReqOperator> {
+        match self {
+            OpArg::Enum(e) => Ok(e.into()),
+            OpArg::Str(s) => match s.as_str() {
+                "<" | "LT" => Ok(crate::ReqOperator::LT),
+                "<=" | "LE" => Ok(crate::ReqOperator::LE),
+                "=" | "==" | "EQ" => Ok(crate::ReqOperator::EQ),
+                ">=" | "GE" => Ok(crate::ReqOperator::GE),
+                ">" | "GT" => Ok(crate::ReqOperator::GT),
+                _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "invalid operator: {s:?} (expected <, <=, =, >=, or >)"
+                ))),
+            },
+        }
+    }
+}
+
+/// An RPM dependency requirement: a package name with an optional version constraint.
+///
+/// A requirement like ``Requirement("foo", ">=", Evr.parse("2.0-1"))`` is satisfied
+/// by any package named ``foo`` whose EVR is at least ``2.0-1``.
+/// A requirement with no constraint (just a name) is satisfied by any version.
+#[pyclass(name = "Requirement", frozen, eq, hash, from_py_object)]
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct PyRequirement(crate::Requirement<'static>);
+
+#[pymethods]
+impl PyRequirement {
+    /// Construct a requirement.
+    ///
+    /// With just a name, any version satisfies.
+    /// With an operator and EVR, only matching versions satisfy.
+    #[new]
+    #[pyo3(signature = (name, op=None, evr=None))]
+    fn new(name: &str, op: Option<OpArg>, evr: Option<PyEvr>) -> PyResult<Self> {
+        match (op, evr) {
+            (None, None) => Ok(PyRequirement(crate::Requirement::new(name.to_owned()))),
+            (Some(op_arg), Some(py_evr)) => {
+                let op = op_arg.into_req_operator()?;
+                let (epoch, version, release) = py_evr.0.values();
+                let evr = crate::Evr::new(epoch.to_owned(), version.to_owned(), release.to_owned());
+                Ok(PyRequirement(crate::Requirement::with_constraint(
+                    name.to_owned(),
+                    op,
+                    evr,
+                )))
+            }
+            _ => Err(pyo3::exceptions::PyValueError::new_err(
+                "op and evr must both be provided, or both omitted",
+            )),
+        }
+    }
+
+    /// The required package name.
+    #[getter]
+    fn name(&self) -> &str {
+        self.0.name()
+    }
+
+    /// The version constraint as (ReqOperator, Evr), or None.
+    #[getter]
+    fn constraint(&self) -> Option<(PyReqOperator, PyEvr)> {
+        self.0
+            .constraint()
+            .map(|(op, evr)| (PyReqOperator::from(op), PyEvr::from(evr.clone())))
+    }
+
+    /// Check whether a given package name and EVR satisfy this requirement.
+    fn satisfies(&self, name: &str, evr: &PyEvr) -> bool {
+        self.0.satisfies(name, &evr.0)
+    }
+
+    fn __repr__(&self) -> String {
+        format!("Requirement({})", self.0)
+    }
+
+    fn __str__(&self) -> String {
+        self.0.to_string()
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Module-level functions
 // ---------------------------------------------------------------------------
 
@@ -237,6 +365,8 @@ fn evr_compare(evr1: &str, evr2: &str) -> i32 {
 pub fn rpm_version(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyEvr>()?;
     m.add_class::<PyNevra>()?;
+    m.add_class::<PyReqOperator>()?;
+    m.add_class::<PyRequirement>()?;
     m.add_function(wrap_pyfunction!(evr_compare, m)?)?;
 
     Ok(())
