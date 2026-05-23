@@ -7,8 +7,8 @@ use pyo3::types::PyType;
 ///
 /// Supports ordering via RPM's version comparison algorithm. See also the
 /// module-level `evr_compare` function for comparing raw EVR strings.
-#[pyclass(name = "Evr", eq, ord, from_py_object)]
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[pyclass(name = "Evr", frozen, eq, ord, hash, from_py_object)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PyEvr(crate::Evr<'static>);
 
 impl<'a> From<crate::Evr<'a>> for PyEvr {
@@ -90,8 +90,8 @@ impl PyEvr {
 /// A full RPM NEVRA: Name, Epoch, Version, Release, Architecture.
 ///
 /// Supports ordering via RPM's version comparison algorithm.
-#[pyclass(name = "Nevra", eq, ord, from_py_object)]
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[pyclass(name = "Nevra", frozen, eq, ord, hash, from_py_object)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PyNevra(crate::Nevra<'static>);
 
 impl<'a> From<crate::Nevra<'a>> for PyNevra {

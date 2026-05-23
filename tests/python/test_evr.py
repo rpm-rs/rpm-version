@@ -117,3 +117,25 @@ class TestNevra:
         a = Nevra.parse("foo-1.0-1.x86_64")
         b = Nevra.parse("foo-1.0-1.x86_64")
         assert a == b
+
+
+class TestHash:
+    def test_evr_hashable(self):
+        s = {Evr.parse("1.0-1"), Evr.parse("2.0-1")}
+        assert len(s) == 2
+
+    def test_evr_epoch_hash_consistency(self):
+        a = Evr.parse("1.0-1")
+        b = Evr.parse("0:1.0-1")
+        assert a == b
+        assert hash(a) == hash(b)
+
+    def test_nevra_hashable(self):
+        s = {Nevra.parse("foo-1.0-1.x86_64"), Nevra.parse("bar-1.0-1.x86_64")}
+        assert len(s) == 2
+
+    def test_nevra_epoch_hash_consistency(self):
+        a = Nevra.parse("foo-1.0-1.x86_64")
+        b = Nevra.parse("foo-0:1.0-1.x86_64")
+        assert a == b
+        assert hash(a) == hash(b)

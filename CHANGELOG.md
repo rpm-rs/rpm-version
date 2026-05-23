@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Added `Hash` implementation for `Evr` and `Nevra` (consistent with `PartialEq` epoch normalization)
+
 ## 0.1.0
 
 - Initial Release, split from https://github.com/rpm-rs/rpm-rs

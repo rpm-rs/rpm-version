@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 #[cfg(feature = "python")]
 mod python;
@@ -146,6 +147,14 @@ impl<'a> Nevra<'a> {
     }
 }
 
+impl Hash for Nevra<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.evr.hash(state);
+        self.arch.hash(state);
+    }
+}
+
 impl fmt::Display for Nevra<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}-{}.{}", self.name, self.evr, self.arch)
@@ -275,6 +284,19 @@ impl PartialEq for Evr<'_> {
             || (self.epoch == "0" && other.epoch == ""))
             && self.version == other.version
             && self.release == other.release
+    }
+}
+
+impl Hash for Evr<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let epoch = if self.epoch.is_empty() {
+            "0"
+        } else {
+            &self.epoch
+        };
+        epoch.hash(state);
+        self.version.hash(state);
+        self.release.hash(state);
     }
 }
 
@@ -964,5 +986,51 @@ mod test {
 
         // except when it comes to breaking up sequences of ascii characters that do impact the comparison
         assert_eq!(Ordering::Less, compare_version_string("1.1Á1", "1.11"));
+    }
+
+    /// Test that Hash is consistent with PartialEq (equal values must hash the same)
+    #[test]
+    fn test_evr_hash_consistency() {
+        use std::hash::{DefaultHasher, Hash, Hasher};
+
+        fn hash_of<T: Hash>(val: &T) -> u64 {
+            let mut h = DefaultHasher::new();
+            val.hash(&mut h);
+            h.finish()
+        }
+
+        // empty epoch and "0" epoch are equal, so must hash the same
+        let evr1 = Evr::parse("1.2.3-45");
+        let evr2 = Evr::parse("0:1.2.3-45");
+        assert_eq!(evr1, evr2);
+        assert_eq!(hash_of(&evr1), hash_of(&evr2));
+
+        // identical EVRs hash the same
+        let evr3 = Evr::parse("2:1.2.3-45");
+        let evr4 = Evr::parse("2:1.2.3-45");
+        assert_eq!(hash_of(&evr3), hash_of(&evr4));
+
+        // different EVRs should (almost certainly) hash differently
+        assert_ne!(hash_of(&evr1), hash_of(&evr3));
+    }
+
+    /// Test that Nevra Hash is consistent with PartialEq
+    #[test]
+    fn test_nevra_hash_consistency() {
+        use std::hash::{DefaultHasher, Hash, Hasher};
+
+        fn hash_of<T: Hash>(val: &T) -> u64 {
+            let mut h = DefaultHasher::new();
+            val.hash(&mut h);
+            h.finish()
+        }
+
+        let nevra1 = Nevra::parse("foo-1.2.3-45.noarch");
+        let nevra2 = Nevra::parse("foo-0:1.2.3-45.noarch");
+        assert_eq!(nevra1, nevra2);
+        assert_eq!(hash_of(&nevra1), hash_of(&nevra2));
+
+        let nevra3 = Nevra::parse("foo-1:1.2.3-45.noarch");
+        assert_ne!(hash_of(&nevra1), hash_of(&nevra3));
     }
 }
