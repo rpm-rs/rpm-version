@@ -403,20 +403,18 @@ fn compare_version_string(version1: &str, version2: &str) -> Ordering {
             break;
         }
 
-        /// match a contiguous string of characters matching the provided pattern
-        /// and return it, along with the rest of the string, if one was found
+        /// Match a contiguous string of characters matching the provided pattern
+        /// and return it, along with the rest of the string, if one was found.
         fn matching_contiguous<F>(string: &str, pat: F) -> Option<(&str, &str)>
         where
             F: Fn(char) -> bool,
         {
-            Some(
-                string.split_at(
-                    string
-                        .find(|c| !pat(c))
-                        .or(Some(string.len()))
-                        .filter(|&x| x > 0)?,
-                ),
-            )
+            let end = string.find(|c| !pat(c)).unwrap_or(string.len());
+            if end == 0 {
+                None
+            } else {
+                Some(string.split_at(end))
+            }
         }
 
         if version1_part.starts_with(|c: char| c.is_ascii_digit()) {

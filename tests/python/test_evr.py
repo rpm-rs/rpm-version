@@ -1,6 +1,6 @@
-"""Tests for Evr, Nevra, evr_compare, and Requirement."""
+"""Tests for Evr, Nevra, evr_compare, evr_sort, and Requirement."""
 
-from rpm_version import Evr, Nevra, evr_compare
+from rpm_version import Evr, Nevra, evr_compare, evr_sort, nevra_sort
 
 
 class TestEvr:
@@ -132,6 +132,55 @@ class TestNevra:
         a = Nevra.parse("foo-1.0-1.x86_64")
         b = Nevra.parse("foo-1.0-1.x86_64")
         assert a == b
+
+
+class TestEvrSort:
+    def test_basic_sort(self):
+        result = evr_sort(["2.0-1", "1.0-1", "3.0-1"])
+        assert result == ["1.0-1", "2.0-1", "3.0-1"]
+
+    def test_epoch_sort(self):
+        result = evr_sort(["2.0-1", "1:0.5-1", "1.0-1"])
+        assert result == ["1.0-1", "2.0-1", "1:0.5-1"]
+
+    def test_tilde_and_caret(self):
+        result = evr_sort(["1.0^git1-1", "1.0-1", "1.0~rc1-1", "1.1-1"])
+        assert result == ["1.0~rc1-1", "1.0-1", "1.0^git1-1", "1.1-1"]
+
+    def test_empty_list(self):
+        assert evr_sort([]) == []
+
+    def test_single_element(self):
+        assert evr_sort(["1.0-1"]) == ["1.0-1"]
+
+    def test_matches_elementwise(self):
+        versions = ["3.0-1", "1:0.1-1", "1.0~rc1-1", "2.0-1", "1.0-1"]
+        assert evr_sort(versions) == sorted(versions, key=Evr.parse)
+
+
+class TestNevraSort:
+    def test_basic_sort(self):
+        result = nevra_sort(
+            ["foo-2.0-1.x86_64", "bar-1.0-1.x86_64", "foo-1.0-1.x86_64"]
+        )
+        assert result == ["bar-1.0-1.x86_64", "foo-1.0-1.x86_64", "foo-2.0-1.x86_64"]
+
+    def test_epoch_sort(self):
+        result = nevra_sort(
+            ["foo-2.0-1.x86_64", "foo-1:0.5-1.x86_64", "foo-1.0-1.x86_64"]
+        )
+        assert result == ["foo-1.0-1.x86_64", "foo-2.0-1.x86_64", "foo-1:0.5-1.x86_64"]
+
+    def test_different_arches(self):
+        result = nevra_sort(["foo-1.0-1.x86_64", "foo-1.0-1.i686", "foo-1.0-1.noarch"])
+        assert result == ["foo-1.0-1.i686", "foo-1.0-1.noarch", "foo-1.0-1.x86_64"]
+
+    def test_empty_list(self):
+        assert nevra_sort([]) == []
+
+    def test_matches_elementwise(self):
+        packages = ["foo-2.0-1.x86_64", "bar-1:0.1-1.noarch", "baz-1.0~rc1-1.i686"]
+        assert nevra_sort(packages) == sorted(packages, key=Nevra.parse)
 
 
 class TestHash:

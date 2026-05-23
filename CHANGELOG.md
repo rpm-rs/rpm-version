@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `Hash` implementation for `Evr` and `Nevra` (consistent with `PartialEq` epoch normalization)
 - Added optional `serde` feature for `Serialize`/`Deserialize` on `Evr` and `Nevra`
 - Added `Requirement` type for version requirement matching (e.g. `foo >= 1:2.0-1`)
+- Added `evr_sort` and `nevra_sort` Python functions for bulk sorting entirely in Rust with FFI overhead and allocations
 
 ## 0.1.0
 

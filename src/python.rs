@@ -354,6 +354,34 @@ fn evr_compare(evr1: &str, evr2: &str) -> i32 {
     }
 }
 
+/// Sort a list of EVR strings using RPM's version comparison algorithm.
+///
+/// Performs all parsing and comparison in Rust, avoiding per-comparison FFI overhead.
+#[pyfunction]
+fn evr_sort(evrs: Vec<String>) -> Vec<String> {
+    let mut parsed: Vec<(crate::Evr<'_>, usize)> = evrs
+        .iter()
+        .enumerate()
+        .map(|(i, s)| (crate::Evr::parse(s), i))
+        .collect();
+    parsed.sort_unstable();
+    parsed.into_iter().map(|(_, i)| evrs[i].clone()).collect()
+}
+
+/// Sort a list of NEVRA strings using RPM's version comparison algorithm.
+///
+/// Performs all parsing and comparison in Rust, avoiding per-comparison FFI overhead.
+#[pyfunction]
+fn nevra_sort(nevras: Vec<String>) -> Vec<String> {
+    let mut parsed: Vec<(crate::Nevra<'_>, usize)> = nevras
+        .iter()
+        .enumerate()
+        .map(|(i, s)| (crate::Nevra::parse(s), i))
+        .collect();
+    parsed.sort_unstable();
+    parsed.into_iter().map(|(_, i)| nevras[i].clone()).collect()
+}
+
 // ---------------------------------------------------------------------------
 // Module registration
 // ---------------------------------------------------------------------------
@@ -368,6 +396,8 @@ pub fn rpm_version(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyReqOperator>()?;
     m.add_class::<PyRequirement>()?;
     m.add_function(wrap_pyfunction!(evr_compare, m)?)?;
+    m.add_function(wrap_pyfunction!(evr_sort, m)?)?;
+    m.add_function(wrap_pyfunction!(nevra_sort, m)?)?;
 
     Ok(())
 }

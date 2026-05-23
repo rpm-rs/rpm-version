@@ -29,10 +29,20 @@ assert!(Evr::parse("1.0^git1") < Evr::parse("1.1"));
 let nevra = Nevra::parse("foo-1:2.3.4-5.x86_64");
 println!("{} {} {}", nevra.name(), nevra.version(), nevra.arch()); // foo 2.3.4 x86_64
 
+// Sorting NEVRAs
+let mut packages = vec![
+    Nevra::parse("foo-2.0-1.x86_64"),
+    Nevra::parse("bar-1.0-1.x86_64"),
+    Nevra::parse("foo-1.0-1.x86_64"),
+];
+packages.sort();
+assert_eq!(packages[0].name(), "bar");
+assert_eq!(packages[2].to_string(), "foo-2.0-1.x86_64");
+
 // Evr and Nevra are hashable
 use std::collections::HashSet;
 let mut seen = HashSet::new();
-seen.insert(nevra);
+seen.insert(Nevra::parse("foo-1.0-1.x86_64"));
 
 // Version requirement matching
 use rpm_version::{Requirement, ReqOperator};
@@ -45,7 +55,7 @@ assert!(!req.satisfies("foo", &Evr::parse("1.0-1")));
 ### In Python
 
 ```python
-from rpm_version import Evr, Nevra, evr_compare
+from rpm_version import Evr, Nevra, evr_compare, evr_sort, nevra_sort
 
 # Compare EVR strings directly
 assert evr_compare("1.2.3-4", "1.2.3-5") == -1
@@ -65,6 +75,13 @@ assert Evr.parse("1.0^git1-1") < Evr.parse("1.1-1")
 # Full NEVRA (Name-Epoch-Version-Release-Architecture) parsing
 nevra = Nevra.parse("foo-1:2.3.4-5.x86_64")
 print(f"{nevra.name} {nevra.version} {nevra.arch}")  # foo 2.3.4 x86_64
+
+# Bulk sorting entirely in Rust (avoids per-comparison FFI overhead)
+sorted_versions = evr_sort(["2.0-1", "1.0-1", "1:0.5-1", "3.0-1"])
+assert sorted_versions == ["1.0-1", "2.0-1", "3.0-1", "1:0.5-1"]
+
+sorted_packages = nevra_sort(["foo-2.0-1.x86_64", "bar-1.0-1.x86_64", "foo-1.0-1.x86_64"])
+assert sorted_packages == ["bar-1.0-1.x86_64", "foo-1.0-1.x86_64", "foo-2.0-1.x86_64"]
 
 # Evr and Nevra are hashable
 seen = {nevra}

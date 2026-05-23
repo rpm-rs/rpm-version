@@ -2,7 +2,7 @@
 name = "rpm-version"
 version = "0.1.0"
 edition = "2024"
-description = "A library for dealing with RPM versions (NEVRA, EVR) correctly."
+description = "A library for dealing with RPM versions (NEVRA, EVR) correctly. Sort algorithm is identical to RPM."
 license = "MIT"
 authors = [
     "Daniel Alley <dalley@redhat.com>"
