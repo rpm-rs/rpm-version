@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 - Added `Hash` implementation for `Evr` and `Nevra` (consistent with `PartialEq` epoch normalization)
+- Added optional `serde` feature for `Serialize`/`Deserialize` on `Evr` and `Nevra`
 
 ## 0.1.0
 

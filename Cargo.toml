@@ -10,7 +10,12 @@ authors = [
 
 [dependencies]
 pyo3 = { version = "0.28", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+
+[dev-dependencies]
+serde_json = "1"
 
 [features]
 default = []
 python = ["pyo3/extension-module", "pyo3/abi3-py310"]
+serde = ["dep:serde"]

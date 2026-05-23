@@ -26,6 +26,7 @@ mod python;
 /// In many contexts (on a system, in a repository), package NEVRAs are meant to be unique. You can have
 /// different packages with the same NEVRA - but you can't install both, or put them both in a repo.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Nevra<'a> {
     name: Cow<'a, str>,
     evr: Evr<'a>,
@@ -204,6 +205,7 @@ impl Ord for Nevra<'_> {
 /// not directly associated with an upstream release and will force it to sort higher, e.g.
 /// 0.5.0 vs 0.5.0^deadbeef
 #[derive(Clone, Debug, Default, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Evr<'a> {
     epoch: Cow<'a, str>,
     version: Cow<'a, str>,
@@ -1032,5 +1034,23 @@ mod test {
 
         let nevra3 = Nevra::parse("foo-1:1.2.3-45.noarch");
         assert_ne!(hash_of(&nevra1), hash_of(&nevra3));
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_evr_serde_roundtrip() {
+        let evr = Evr::parse("1:2.3.4-5");
+        let json = serde_json::to_string(&evr).unwrap();
+        let evr2: Evr = serde_json::from_str(&json).unwrap();
+        assert_eq!(evr, evr2);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn test_nevra_serde_roundtrip() {
+        let nevra = Nevra::parse("foo-1:2.3.4-5.x86_64");
+        let json = serde_json::to_string(&nevra).unwrap();
+        let nevra2: Nevra = serde_json::from_str(&json).unwrap();
+        assert_eq!(nevra, nevra2);
     }
 }
