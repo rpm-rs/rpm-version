@@ -78,9 +78,22 @@ impl PyEvr {
         self.0.release()
     }
 
-    /// Write the EVR in normalized form, always including the epoch (e.g. `"0:1.2.3-4"`).
-    fn as_normalized_form(&self) -> String {
-        self.0.as_normalized_form()
+    /// Return an epoch:version-release (EVR) string in a normalized form which always
+    /// includes an epoch.
+    ///
+    /// A null epoch is equivalent to 0, hence, this uses an epoch of 0
+    /// when the epoch is not present. e.g. `"0:1.2.3-4"`
+    fn evr(&self) -> String {
+        self.0.evr()
+    }
+
+    /// Return an epoch:version-release (EVR) string in short form.
+    ///
+    /// Does does not print the epoch when it is not present, e.g. `"1.2.3-4"`.
+    ///
+    /// Same as [`str(Evr)`]
+    fn evr_short(&self) -> String {
+        self.0.to_string()
     }
 }
 
@@ -193,14 +206,30 @@ impl PyNevra {
         ))
     }
 
-    /// Write the NEVRA in normalized form, always including the epoch
-    /// (e.g. `"foo-0:1.2.3-4.x86_64"`).
-    fn as_normalized_form(&self) -> String {
-        self.0.as_normalized_form()
+    /// Returns the name-epoch-version-release.arch string (NEVRA), e.g. `"foo-1:2.0-3.x86_64"`.
+    ///
+    /// A package having no epoch value is equivalent to having an epoch of zero, hence,
+    /// when the epoch is not present it prints an epoch of 0 - e.g. `"0:1.2.3-4"`
+    /// This is a normalized form, if you want the more display-friendly form, use [`nevra_short()`]
+    fn nevra(&self) -> String {
+        self.0.nevra()
     }
 
-    /// Write an NVRA string (no epoch), typically used for RPM filenames
-    /// (e.g. `"foo-1.2.3-4.x86_64"`).
+    /// Returns the name-epoch-version-release.arch string (NEVRA), e.g.`"foo-1:2.0-3.x86_64"`.
+    ///
+    /// Unlike [`nevra()`], this doesn't print the epoch if it is 0 or non-existing, e.g.
+    /// `"foo-2.0-3.x86_64"`, but does print it otherwise.
+    ///
+    /// Same as ['str(Nevra)']
+    fn nevra_short(&self) -> String {
+        self.0.nevra_short()
+    }
+
+    /// Returns the name-version-release.arch string (NVRA)
+    ///
+    /// This is the form typically used for RPM filenames. It is similar to NEVRA,
+    /// but does not include epoch (even when it is present)
+    /// e.g. `"foo-2.0-3.x86_64"`.
     fn nvra(&self) -> String {
         self.0.nvra()
     }

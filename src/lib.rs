@@ -4,7 +4,7 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 
 #[cfg(feature = "python")]
-mod python;
+pub mod python;
 
 /// A full RPM "NEVRA" consists of 5 different components - Name, Epoch, Version, Release, and Architecture.
 ///
@@ -122,24 +122,31 @@ impl<'a> Nevra<'a> {
         (name, epoch, version, release, arch)
     }
 
-    /// Write an NEVRA string in a normalized form which always includes an epoch
+    /// Returns the name-epoch-version-release.arch string (NEVRA), e.g. `"foo-1:2.0-3.x86_64"`.
     ///
-    /// The standard string representation of an EVR will ignore the epoch if not set.  A package
-    /// having no epoch value is equivalent to having an epoch of zero. Sometimes it is useful to
-    /// write NEVRAs in a form such that equivalent values are represented identically, therefore,
-    /// this "normalized" form will always include it.
-    pub fn as_normalized_form(&self) -> String {
-        format!(
-            "{}-{}.{}",
-            self.name,
-            self.evr.as_normalized_form(),
-            self.arch
-        )
+    /// A package having no epoch value is equivalent to having an epoch of zero, hence,
+    /// when the epoch is not present it prints an epoch of 0 - e.g. `"0:1.2.3-4"`
+    ///
+    /// This is a normalized form, if you want the more display-friendly form, use [`nevra_short()`]
+    pub fn nevra(&self) -> String {
+        format!("{}-{}.{}", self.name, self.evr.evr(), self.arch)
     }
 
-    /// Write an NVRA string - which doesn't include the "epoch"
+    /// Returns the name-epoch-version-release.arch string (NEVRA), e.g. `"foo-1:2.0-3.x86_64"`.
     ///
-    /// This is the form typically used for RPM filenames.
+    /// Unlike [`nevra()`], this doesn't print the epoch if it is 0 or non-existing, e.g.
+    /// `"foo-2.0-3.x86_64"`, but does print it otherwise.
+    ///
+    /// Same as [`to_string()`]
+    pub fn nevra_short(&self) -> String {
+        self.to_string()
+    }
+
+    /// Returns the name-version-release.arch string (NVRA)
+    ///
+    /// This is the form typically used for RPM filenames. It is similar to NEVRA,
+    /// but does not include epoch (even when it is present)
+    /// e.g. `"foo-2.0-3.x86_64"`.
     pub fn nvra(&self) -> String {
         format!(
             "{}-{}-{}.{}",
@@ -257,13 +264,12 @@ impl<'a> Evr<'a> {
         self.release = release.into();
     }
 
-    /// Write an EVR string in a normalized form which always includes an epoch
+    /// Return an epoch:version-release (EVR) string in a normalized form which always
+    /// includes an epoch.
     ///
-    /// The standard string representation of an EVR will ignore the epoch if not set.  A package
-    /// having no epoch value is equivalent to having an epoch of zero. Sometimes it is useful to
-    /// write NEVRAs in a form such that equivalent values are represented identically, therefore,
-    /// this "normalized" form will always include it.
-    pub fn as_normalized_form(&self) -> String {
+    /// A null epoch is equivalent to 0, hence, this uses an epoch of 0
+    /// when the epoch is not present. e.g. `"0:1.2.3-4"`
+    pub fn evr(&self) -> String {
         let epoch = if self.epoch.is_empty() {
             "0"
         } else {
@@ -271,6 +277,15 @@ impl<'a> Evr<'a> {
         };
 
         format!("{}:{}-{}", epoch, self.version(), self.release())
+    }
+
+    /// Return an epoch:version-release (EVR) string in short form.
+    ///
+    /// Does does not print the epoch when it is not present, e.g. `"1.2.3-4"`.
+    ///
+    /// Same as [`to_string()`]
+    pub fn evr_short(&self) -> String {
+        self.to_string()
     }
 
     /// Return the epoch, version and release values as a 3-element tuple
@@ -586,22 +601,20 @@ mod test {
     fn test_nevra_tostr() {
         let nevra = Nevra::new("foo", "", "1.2.3", "45", "x86_64");
         assert_eq!("foo-1.2.3-45.x86_64", nevra.to_string());
-        assert_eq!("foo-0:1.2.3-45.x86_64", nevra.as_normalized_form());
+        assert_eq!("foo-1.2.3-45.x86_64", nevra.nevra_short());
+        assert_eq!("foo-0:1.2.3-45.x86_64", nevra.nevra());
 
         let nevra = Nevra::new("foo", "0", "1.2.3", "45", "x86_64");
         assert_eq!("foo-0:1.2.3-45.x86_64", nevra.to_string());
-        assert_eq!("foo-0:1.2.3-45.x86_64", nevra.as_normalized_form());
+        assert_eq!("foo-0:1.2.3-45.x86_64", nevra.nevra());
 
         let nevra = Nevra::new("foo", "1", "2.3.4", "5", "x86_64");
         assert_eq!("foo-1:2.3.4-5.x86_64", nevra.to_string());
-        assert_eq!("foo-1:2.3.4-5.x86_64", nevra.as_normalized_form());
+        assert_eq!("foo-1:2.3.4-5.x86_64", nevra.nevra());
 
         let nevra = Nevra::new("python3.9", "0", "3.9.11", "2.fc38", "x86_64");
         assert_eq!("python3.9-0:3.9.11-2.fc38.x86_64", nevra.to_string());
-        assert_eq!(
-            "python3.9-0:3.9.11-2.fc38.x86_64",
-            nevra.as_normalized_form()
-        );
+        assert_eq!("python3.9-0:3.9.11-2.fc38.x86_64", nevra.nevra());
     }
 
     /// Test that a correctly formed EVR string is parsed correctly
@@ -708,11 +721,12 @@ mod test {
     fn test_evr_tostr() {
         let evr = Evr::new("", "1.2.3", "45");
         assert_eq!("1.2.3-45", evr.to_string());
-        assert_eq!("0:1.2.3-45", evr.as_normalized_form());
+        assert_eq!("1.2.3-45", evr.evr_short());
+        assert_eq!("0:1.2.3-45", evr.evr());
 
         let evr = Evr::new("0", "1.2.3", "45");
         assert_eq!("0:1.2.3-45", evr.to_string());
-        assert_eq!("0:1.2.3-45", evr.as_normalized_form());
+        assert_eq!("0:1.2.3-45", evr.evr());
     }
 
     /// Test that a correctly formed EVR string is parsed correctly

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.4.0
+
+- Replace `Nevra::as_normalized_form()` with `Nevra::nevra()`
+- Replace `Nevra::nevra()` (the original) with `Nevra::nevra_short()`
+
 ## 0.3.0
 
 - Added `set_epoch`, `set_version`, and `set_release` methods to `Evr`
