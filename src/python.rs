@@ -210,6 +210,7 @@ impl PyNevra {
     ///
     /// A package having no epoch value is equivalent to having an epoch of zero, hence,
     /// when the epoch is not present it prints an epoch of 0 - e.g. `"0:1.2.3-4"`
+    ///
     /// This is a normalized form, if you want the more display-friendly form, use [`nevra_short()`]
     fn nevra(&self) -> String {
         self.0.nevra()
