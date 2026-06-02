@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.5.0
+
 - Added `EvrSortKey` newtype wrapping `Vec<u8>` with `from_values()`, `parse()`, and `as_bytes()` methods
 - Added `Evr::sortkey()` returning `EvrSortKey`
 - Added `version_sortkey()` for encoding a single version/release component
