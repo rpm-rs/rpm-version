@@ -1,3 +1,9 @@
+# rpm-version
+
+[![crates.io](https://img.shields.io/crates/v/rpm-version.svg)](https://crates.io/crates/rpm-version)
+[![docs.rs](https://docs.rs/rpm-version/badge.svg)](https://docs.rs/rpm-version)
+[![PyPI](https://img.shields.io/pypi/v/rpm-version.svg)](https://pypi.org/project/rpm-version/)
+
 ## Description
 
 A library for dealing with RPM versions (NEVRA, EVR) correctly. Sort algorithm is identical to RPM.
