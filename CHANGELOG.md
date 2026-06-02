@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+- Added `EvrSortKey` newtype wrapping `Vec<u8>` with `from_values()`, `parse()`, and `as_bytes()` methods
+- Added `Evr::sortkey()` returning `EvrSortKey`
+- Added `version_sortkey()` for encoding a single version/release component
+- Python: Added `EvrSortKey` class with `from_values()` and `parse()` classmethods returning `bytes`
+- Python: Added `Evr.sortkey()` method
+- Python: Added `version_sortkey()` function
+
 ## 0.4.0
 
 - Replace `Nevra::as_normalized_form()` with `Nevra::nevra()`

@@ -6,6 +6,9 @@ use std::hash::{Hash, Hasher};
 #[cfg(feature = "python")]
 pub mod python;
 
+mod sortkey;
+pub use sortkey::*;
+
 /// A full RPM "NEVRA" consists of 5 different components - Name, Epoch, Version, Release, and Architecture.
 ///
 /// Name is the name of the package.
@@ -299,6 +302,11 @@ impl<'a> Evr<'a> {
         let (version, release) = vr.split_once('-').unwrap_or((vr, ""));
 
         (epoch, version, release)
+    }
+
+    /// Encode this EVR as a memcmp-sortable binary key.
+    pub fn sortkey(&self) -> EvrSortKey {
+        EvrSortKey::from_values(&self.epoch, &self.version, &self.release)
     }
 }
 
@@ -596,6 +604,32 @@ impl fmt::Display for Requirement<'_> {
 mod test {
     use super::*;
 
+    /// Helper: assert that both compare_version_string and version_sortkey
+    /// produce the expected ordering (cross-validates both implementations)
+    fn assert_ver_order(a: &str, b: &str, expected: Ordering) {
+        assert_eq!(
+            compare_version_string(a, b),
+            expected,
+            "compare_version_string({a:?}, {b:?})"
+        );
+        assert_eq!(
+            version_sortkey(a).cmp(&version_sortkey(b)),
+            expected,
+            "version_sortkey({a:?}) vs version_sortkey({b:?})"
+        );
+    }
+
+    /// Helper: assert that both Evr::cmp and Evr::sortkey produce the expected
+    /// ordering (cross-validates both implementations)
+    fn assert_evr_order(a: Evr, b: Evr, expected: Ordering) {
+        assert_eq!(a.cmp(&b), expected, "Evr::cmp({a:?}, {b:?})");
+        assert_eq!(
+            a.sortkey().cmp(&b.sortkey()),
+            expected,
+            "Evr::sortkey({a:?}) vs Evr::sortkey({b:?})"
+        );
+    }
+
     /// Test that NEVRAs are printed as expected
     #[test]
     fn test_nevra_tostr() {
@@ -770,342 +804,267 @@ mod test {
     /// Test comparing EVRs using comparison operators
     #[test]
     fn test_evr_ord() {
-        // compare the same EVR without epoch as equal
-        let evr1 = Evr::parse("1.2.3-45");
-        let evr2 = Evr::parse("1.2.3-45");
-        assert!(evr1 == evr2);
+        // same EVR
+        assert_evr_order(
+            Evr::parse("1.2.3-45"),
+            Evr::parse("1.2.3-45"),
+            Ordering::Equal,
+        );
+        assert_evr_order(
+            Evr::parse("2:1.2.3-45"),
+            Evr::parse("2:1.2.3-45"),
+            Ordering::Equal,
+        );
+        // zero-epoch == default-epoch
+        assert_evr_order(
+            Evr::parse("1.2.3-45"),
+            Evr::parse("0:1.2.3-45"),
+            Ordering::Equal,
+        );
+        // higher epoch wins
+        assert_evr_order(
+            Evr::parse("1.2.3-45"),
+            Evr::parse("1:1.2.3-45"),
+            Ordering::Less,
+        );
+        // epoch dominates version
+        assert_evr_order(
+            Evr::parse("4.2.3-45"),
+            Evr::parse("1:1.2.3-45"),
+            Ordering::Less,
+        );
 
-        // compare the same EVR with epoch as equal
-        let evr1 = Evr::parse("2:1.2.3-45");
-        let evr2 = Evr::parse("2:1.2.3-45");
-        assert!(evr1 == evr2);
+        // version ordering
+        assert_evr_order(
+            Evr::parse("1.2.3-45"),
+            Evr::parse("1.2.4-45"),
+            Ordering::Less,
+        );
+        assert_evr_order(
+            Evr::parse("1.23.3-45"),
+            Evr::parse("1.2.3-45"),
+            Ordering::Greater,
+        );
+        assert_evr_order(
+            Evr::parse("12.2.3-45"),
+            Evr::parse("1.2.3-45"),
+            Ordering::Greater,
+        );
+        assert_evr_order(
+            Evr::parse("1.2.3-45"),
+            Evr::parse("1.12.3-45"),
+            Ordering::Less,
+        );
 
-        // compare the same EVR with zero-epoch as equal to default-epoch
-        let evr1 = Evr::parse("1.2.3-45");
-        let evr2 = Evr::parse("0:1.2.3-45");
-        assert!(evr1 == evr2);
+        // tilde sorts older
+        assert_evr_order(
+            Evr::parse("~1.2.3-45"),
+            Evr::parse("1.2.3-45"),
+            Ordering::Less,
+        );
+        assert_evr_order(
+            Evr::parse("~12.2.3-45"),
+            Evr::parse("1.2.3-45"),
+            Ordering::Less,
+        );
+        assert_evr_order(
+            Evr::parse("~12.2.3-45"),
+            Evr::parse("~1.2.3-45"),
+            Ordering::Greater,
+        );
+        // higher epoch dominates even with tilde in version
+        assert_evr_order(
+            Evr::parse("3:~1.2.3-45"),
+            Evr::parse("0:1.2.3-45"),
+            Ordering::Greater,
+        );
 
-        // compare EVR with higher epoch and same version / release
-        let evr1 = Evr::parse("1.2.3-45");
-        let evr2 = Evr::parse("1:1.2.3-45");
-        assert!(evr1 < evr2);
-
-        // compare EVR with higher epoch taken over EVR with higher version
-        let evr1 = Evr::parse("4.2.3-45");
-        let evr2 = Evr::parse("1:1.2.3-45");
-        assert!(evr1 < evr2);
-
-        // compare EVR with higher version
-        let evr1 = Evr::parse("1.2.3-45");
-        let evr2 = Evr::parse("1.2.4-45");
-        assert!(evr1 < evr2);
-
-        // compare EVR with higher version
-        let evr1 = Evr::parse("1.23.3-45");
-        let evr2 = Evr::parse("1.2.3-45");
-        assert!(evr1 > evr2);
-
-        // compare EVR with higher version
-        let evr1 = Evr::parse("12.2.3-45");
-        let evr2 = Evr::parse("1.2.3-45");
-        assert!(evr1 > evr2);
-
-        // compare EVR with higher version
-        let evr1 = Evr::parse("1.2.3-45");
-        let evr2 = Evr::parse("1.12.3-45");
-        assert!(evr1 < evr2);
-
-        // compare versions with tilde parsing as older
-        let evr1 = Evr::parse("~1.2.3-45");
-        let evr2 = Evr::parse("1.2.3-45");
-        assert!(evr1 < evr2);
-
-        // compare versions with tilde parsing as older
-        let evr1 = Evr::parse("~12.2.3-45");
-        let evr2 = Evr::parse("1.2.3-45");
-        assert!(evr1 < evr2);
-
-        // compare versions with tilde parsing as older
-        let evr1 = Evr::parse("~12.2.3-45");
-        let evr2 = Evr::parse("~1.2.3-45");
-        assert!(evr1 > evr2);
-
-        // compare versions with tilde parsing as older
-        let evr1 = Evr::parse("~3:12.2.3-45");
-        let evr2 = Evr::parse("0:1.2.3-45");
-        assert!(evr1 < evr2);
-
-        // compare release
-        let evr1 = Evr::parse("1.2.3-45");
-        let evr2 = Evr::parse("1.2.3-46");
-        assert!(evr1 < evr2);
-
-        // compare release
-        let evr1 = Evr::parse("1.2.3-45.fc39");
-        let evr2 = Evr::parse("1.2.3-46.fc38");
-        assert!(evr1 < evr2);
-
-        // compare release
-        let evr1 = Evr::parse("1.2.3-3");
-        let evr2 = Evr::parse("1.2.3-10");
-        assert!(evr1 < evr2);
-
-        // compare release
-        let evr1 = Evr::parse("1.2.3-3.fc40");
-        let evr2 = Evr::parse("1.2.3-10.fc39");
-        assert!(evr1 < evr2);
+        // release ordering
+        assert_evr_order(
+            Evr::parse("1.2.3-45"),
+            Evr::parse("1.2.3-46"),
+            Ordering::Less,
+        );
+        assert_evr_order(
+            Evr::parse("1.2.3-45.fc39"),
+            Evr::parse("1.2.3-46.fc38"),
+            Ordering::Less,
+        );
+        assert_evr_order(
+            Evr::parse("1.2.3-3"),
+            Evr::parse("1.2.3-10"),
+            Ordering::Less,
+        );
+        assert_evr_order(
+            Evr::parse("1.2.3-3.fc40"),
+            Evr::parse("1.2.3-10.fc39"),
+            Ordering::Less,
+        );
     }
 
     /// Test many different combinations of version string comparison behavior
     #[test]
     fn test_compare_version_string() {
-        assert_eq!(Ordering::Equal, compare_version_string("1.0", "1.0"));
-        assert_eq!(Ordering::Less, compare_version_string("1.0", "2.0"));
-        assert_eq!(Ordering::Greater, compare_version_string("2.0", "1.0"));
+        assert_ver_order("1.0", "1.0", Ordering::Equal);
+        assert_ver_order("1.0", "2.0", Ordering::Less);
+        assert_ver_order("2.0", "1.0", Ordering::Greater);
 
-        assert_eq!(Ordering::Equal, compare_version_string("2.0.1", "2.0.1"));
-        assert_eq!(Ordering::Less, compare_version_string("2.0", "2.0.1"));
-        assert_eq!(Ordering::Greater, compare_version_string("2.0.1", "2.0"));
+        assert_ver_order("2.0.1", "2.0.1", Ordering::Equal);
+        assert_ver_order("2.0", "2.0.1", Ordering::Less);
+        assert_ver_order("2.0.1", "2.0", Ordering::Greater);
 
-        assert_eq!(Ordering::Less, compare_version_string("5.0.1", "5.0.1a"));
-        assert_eq!(Ordering::Greater, compare_version_string("5.0.1a", "5.0.1"));
+        assert_ver_order("5.0.1", "5.0.1a", Ordering::Less);
+        assert_ver_order("5.0.1a", "5.0.1", Ordering::Greater);
 
-        assert_eq!(Ordering::Equal, compare_version_string("5.0.a1", "5.0.a1"));
-        assert_eq!(Ordering::Equal, compare_version_string("5.0.1a", "5.0.1a"));
-        assert_eq!(Ordering::Less, compare_version_string("5.0.a1", "5.0.a2"));
-        assert_eq!(
-            Ordering::Greater,
-            compare_version_string("5.0.a2", "5.0.a1")
-        );
+        assert_ver_order("5.0.a1", "5.0.a1", Ordering::Equal);
+        assert_ver_order("5.0.1a", "5.0.1a", Ordering::Equal);
+        assert_ver_order("5.0.a1", "5.0.a2", Ordering::Less);
+        assert_ver_order("5.0.a2", "5.0.a1", Ordering::Greater);
 
-        assert_eq!(Ordering::Less, compare_version_string("10abc", "10.1abc"));
-        assert_eq!(
-            Ordering::Greater,
-            compare_version_string("10.1abc", "10abc")
-        );
+        assert_ver_order("10abc", "10.1abc", Ordering::Less);
+        assert_ver_order("10.1abc", "10abc", Ordering::Greater);
 
-        assert_eq!(Ordering::Less, compare_version_string("8.0", "8.0.rc1"));
-        assert_eq!(Ordering::Greater, compare_version_string("8.0.rc1", "8.0"));
+        assert_ver_order("8.0", "8.0.rc1", Ordering::Less);
+        assert_ver_order("8.0.rc1", "8.0", Ordering::Greater);
 
-        assert_eq!(Ordering::Greater, compare_version_string("10b2", "10a1"));
-        assert_eq!(Ordering::Less, compare_version_string("10a2", "10b2"));
+        assert_ver_order("10b2", "10a1", Ordering::Greater);
+        assert_ver_order("10a2", "10b2", Ordering::Less);
 
-        assert_eq!(Ordering::Less, compare_version_string("6.6p1", "7.5p1"));
-        assert_eq!(Ordering::Greater, compare_version_string("7.5p1", "6.6p1"));
+        assert_ver_order("6.6p1", "7.5p1", Ordering::Less);
+        assert_ver_order("7.5p1", "6.6p1", Ordering::Greater);
 
-        assert_eq!(Ordering::Equal, compare_version_string("6.5p1", "6.5p1"));
-        assert_eq!(Ordering::Less, compare_version_string("6.5p1", "6.5p2"));
-        assert_eq!(Ordering::Greater, compare_version_string("6.5p2", "6.5p1"));
-        assert_eq!(Ordering::Less, compare_version_string("6.5p2", "6.6p1"));
-        assert_eq!(Ordering::Greater, compare_version_string("6.6p1", "6.5p2"));
+        assert_ver_order("6.5p1", "6.5p1", Ordering::Equal);
+        assert_ver_order("6.5p1", "6.5p2", Ordering::Less);
+        assert_ver_order("6.5p2", "6.5p1", Ordering::Greater);
+        assert_ver_order("6.5p2", "6.6p1", Ordering::Less);
+        assert_ver_order("6.6p1", "6.5p2", Ordering::Greater);
 
-        assert_eq!(Ordering::Equal, compare_version_string("6.5p10", "6.5p10"));
-        assert_eq!(Ordering::Less, compare_version_string("6.5p1", "6.5p10"));
-        assert_eq!(Ordering::Greater, compare_version_string("6.5p10", "6.5p1"));
+        assert_ver_order("6.5p10", "6.5p10", Ordering::Equal);
+        assert_ver_order("6.5p1", "6.5p10", Ordering::Less);
+        assert_ver_order("6.5p10", "6.5p1", Ordering::Greater);
 
-        assert_eq!(Ordering::Equal, compare_version_string("abc10", "abc10"));
-        assert_eq!(Ordering::Less, compare_version_string("abc10", "abc10.1"));
-        assert_eq!(
-            Ordering::Greater,
-            compare_version_string("abc10.1", "abc10")
-        );
+        assert_ver_order("abc10", "abc10", Ordering::Equal);
+        assert_ver_order("abc10", "abc10.1", Ordering::Less);
+        assert_ver_order("abc10.1", "abc10", Ordering::Greater);
 
-        assert_eq!(Ordering::Equal, compare_version_string("abc.4", "abc.4"));
-        assert_eq!(Ordering::Less, compare_version_string("abc.4", "8"));
-        assert_eq!(Ordering::Greater, compare_version_string("8", "abc.4"));
-        assert_eq!(Ordering::Less, compare_version_string("abc.4", "2"));
-        assert_eq!(Ordering::Greater, compare_version_string("2", "abc.4"));
+        assert_ver_order("abc.4", "abc.4", Ordering::Equal);
+        assert_ver_order("abc.4", "8", Ordering::Less);
+        assert_ver_order("8", "abc.4", Ordering::Greater);
+        assert_ver_order("abc.4", "2", Ordering::Less);
+        assert_ver_order("2", "abc.4", Ordering::Greater);
 
-        assert_eq!(Ordering::Equal, compare_version_string("1.0aa", "1.0aa"));
-        assert_eq!(Ordering::Less, compare_version_string("1.0a", "1.0aa"));
-        assert_eq!(Ordering::Greater, compare_version_string("1.0aa", "1.0a"));
+        assert_ver_order("1.0aa", "1.0aa", Ordering::Equal);
+        assert_ver_order("1.0a", "1.0aa", Ordering::Less);
+        assert_ver_order("1.0aa", "1.0a", Ordering::Greater);
     }
 
     /// test handling of numeric-like values in version strings
     #[test]
     fn test_version_comparison_numeric_handling() {
-        assert_eq!(
-            Ordering::Equal,
-            compare_version_string("10.0001", "10.0001")
-        );
+        assert_ver_order("10.0001", "10.0001", Ordering::Equal);
         // sequences of leading zeroes are meant to be ignored - it's not *actually* treated like a numeric value
-        assert_eq!(Ordering::Equal, compare_version_string("10.0001", "10.1"));
-        assert_eq!(Ordering::Equal, compare_version_string("10.1", "10.0001"));
-        assert_eq!(Ordering::Less, compare_version_string("10.0001", "10.0039"));
-        assert_eq!(
-            Ordering::Greater,
-            compare_version_string("10.0039", "10.0001")
-        );
+        assert_ver_order("10.0001", "10.1", Ordering::Equal);
+        assert_ver_order("10.1", "10.0001", Ordering::Equal);
+        assert_ver_order("10.0001", "10.0039", Ordering::Less);
+        assert_ver_order("10.0039", "10.0001", Ordering::Greater);
         // but sequences of zeroes within a numeric segment are not ignored
-        assert_eq!(Ordering::Less, compare_version_string("10.1", "10.10001"));
-        assert_eq!(
-            Ordering::Less,
-            compare_version_string("10.1111", "10.10001")
-        );
-        assert_eq!(
-            Ordering::Greater,
-            compare_version_string("10.11111", "10.10001")
-        );
+        assert_ver_order("10.1", "10.10001", Ordering::Less);
+        assert_ver_order("10.1111", "10.10001", Ordering::Less);
+        assert_ver_order("10.11111", "10.10001", Ordering::Greater);
 
-        assert_eq!(
-            Ordering::Equal,
-            compare_version_string("20240521", "20240521")
-        );
-        assert_eq!(
-            Ordering::Less,
-            compare_version_string("20240521", "20240522")
-        );
-        assert_eq!(
-            Ordering::Greater,
-            compare_version_string("20240522", "20240521")
-        );
-        assert_eq!(
-            Ordering::Less,
-            compare_version_string("20240521", "202405210")
-        );
+        assert_ver_order("20240521", "20240521", Ordering::Equal);
+        assert_ver_order("20240521", "20240522", Ordering::Less);
+        assert_ver_order("20240522", "20240521", Ordering::Greater);
+        assert_ver_order("20240521", "202405210", Ordering::Less);
     }
 
     /// Test behavior of tilde and caret operators
     #[test]
     fn test_version_comparison_tilde_and_caret() {
-        assert_eq!(
-            Ordering::Equal,
-            compare_version_string("1.0~rc1", "1.0~rc1")
-        );
-        assert_eq!(Ordering::Less, compare_version_string("1.0~rc1", "1.0"));
-        assert_eq!(Ordering::Greater, compare_version_string("1.0", "1.0~rc1"));
-        assert_eq!(Ordering::Less, compare_version_string("1.0~rc1", "1.0~rc2"));
-        assert_eq!(
-            Ordering::Greater,
-            compare_version_string("1.0~rc2", "1.0~rc1")
-        );
-        assert_eq!(
-            Ordering::Equal,
-            compare_version_string("1.0~rc1~git123", "1.0~rc1~git123")
-        );
-        assert_eq!(
-            Ordering::Less,
-            compare_version_string("1.0~rc1~git123", "1.0~rc1")
-        );
-        assert_eq!(
-            Ordering::Greater,
-            compare_version_string("1.0~rc1", "1.0~rc1~git123")
-        );
+        assert_ver_order("1.0~rc1", "1.0~rc1", Ordering::Equal);
+        assert_ver_order("1.0~rc1", "1.0", Ordering::Less);
+        assert_ver_order("1.0", "1.0~rc1", Ordering::Greater);
+        assert_ver_order("1.0~rc1", "1.0~rc2", Ordering::Less);
+        assert_ver_order("1.0~rc2", "1.0~rc1", Ordering::Greater);
+        assert_ver_order("1.0~rc1~git123", "1.0~rc1~git123", Ordering::Equal);
+        assert_ver_order("1.0~rc1~git123", "1.0~rc1", Ordering::Less);
+        assert_ver_order("1.0~rc1", "1.0~rc1~git123", Ordering::Greater);
 
-        assert_eq!(Ordering::Equal, compare_version_string("1.0^", "1.0^"));
-        assert_eq!(Ordering::Less, compare_version_string("1.0", "1.0^"));
-        assert_eq!(Ordering::Greater, compare_version_string("1.0^", "1.0"));
+        assert_ver_order("1.0^", "1.0^", Ordering::Equal);
+        assert_ver_order("1.0", "1.0^", Ordering::Less);
+        assert_ver_order("1.0^", "1.0", Ordering::Greater);
 
-        assert_eq!(Ordering::Less, compare_version_string("1.0", "1.0git1^"));
-        assert_eq!(
-            Ordering::Less,
-            compare_version_string("1.0^git1", "1.0^git2")
-        );
-        assert_eq!(
-            Ordering::Greater,
-            compare_version_string("1.01", "1.0^git1")
-        );
-        assert_eq!(
-            Ordering::Equal,
-            compare_version_string("1.0^20240501", "1.0^20240501")
-        );
-        assert_eq!(
-            Ordering::Less,
-            compare_version_string("1.0^20240501", "1.0.1")
-        );
-        assert_eq!(
-            Ordering::Equal,
-            compare_version_string("1.0^20240501^git1", "1.0^20240501^git1")
-        );
-        assert_eq!(
-            Ordering::Greater,
-            compare_version_string("1.0^20240502", "1.0^20240501^git1")
-        );
-        assert_eq!(
-            Ordering::Equal,
-            compare_version_string("1.0~rc1^git1", "1.0~rc1^git1")
-        );
-        assert_eq!(
-            Ordering::Less,
-            compare_version_string("1.0~rc1", "1.0~rc1^git1")
-        );
-        assert_eq!(
-            Ordering::Greater,
-            compare_version_string("1.0~rc1^git1", "1.0~rc1")
-        );
-        assert_eq!(
-            Ordering::Equal,
-            compare_version_string("1.0^git1~pre", "1.0^git1~pre")
-        );
-        assert_eq!(
-            Ordering::Less,
-            compare_version_string("1.0^git1~pre", "1.0^git1")
-        );
-        assert_eq!(
-            Ordering::Greater,
-            compare_version_string("1.0^git1", "1.0^git1~pre")
-        );
+        assert_ver_order("1.0", "1.0git1^", Ordering::Less);
+        assert_ver_order("1.0^git1", "1.0^git2", Ordering::Less);
+        assert_ver_order("1.01", "1.0^git1", Ordering::Greater);
+        assert_ver_order("1.0^20240501", "1.0^20240501", Ordering::Equal);
+        assert_ver_order("1.0^20240501", "1.0.1", Ordering::Less);
+        assert_ver_order("1.0^20240501^git1", "1.0^20240501^git1", Ordering::Equal);
+        assert_ver_order("1.0^20240502", "1.0^20240501^git1", Ordering::Greater);
+        assert_ver_order("1.0~rc1^git1", "1.0~rc1^git1", Ordering::Equal);
+        assert_ver_order("1.0~rc1", "1.0~rc1^git1", Ordering::Less);
+        assert_ver_order("1.0~rc1^git1", "1.0~rc1", Ordering::Greater);
+        assert_ver_order("1.0^git1~pre", "1.0^git1~pre", Ordering::Equal);
+        assert_ver_order("1.0^git1~pre", "1.0^git1", Ordering::Less);
+        assert_ver_order("1.0^git1", "1.0^git1~pre", Ordering::Greater);
     }
 
     /// Test some version comparison behavior that is a bit non-intuitive
     /// (but needs to be maintained for compatibility)
     #[test]
     fn test_non_intuitive_comparison_behavior() {
-        assert_eq!(Ordering::Less, compare_version_string("1e.fc33", "1.fc33"));
-        assert_eq!(
-            Ordering::Greater,
-            compare_version_string("1g.fc33", "1.fc33")
-        );
+        assert_ver_order("1e.fc33", "1.fc33", Ordering::Less);
+        assert_ver_order("1g.fc33", "1.fc33", Ordering::Greater);
     }
 
     /// Test handling of non-alphanumeric ascii characters (excluding separators)
     #[test]
     fn test_non_alphanumeric_equivalence() {
         // the existence of sequences of non-alphanumeric characters should not impact the version comparison at all
-        assert_eq!(Ordering::Equal, compare_version_string("b", "b"));
-        assert_eq!(Ordering::Equal, compare_version_string("b+", "b+"));
-        assert_eq!(Ordering::Equal, compare_version_string("b+", "b_"));
-        assert_eq!(Ordering::Equal, compare_version_string("b_", "b+"));
-        assert_eq!(Ordering::Equal, compare_version_string("+b", "+b"));
-        assert_eq!(Ordering::Equal, compare_version_string("+b", "_b"));
-        assert_eq!(Ordering::Equal, compare_version_string("_b", "+b"));
+        assert_ver_order("b", "b", Ordering::Equal);
+        assert_ver_order("b+", "b+", Ordering::Equal);
+        assert_ver_order("b+", "b_", Ordering::Equal);
+        assert_ver_order("b_", "b+", Ordering::Equal);
+        assert_ver_order("+b", "+b", Ordering::Equal);
+        assert_ver_order("+b", "_b", Ordering::Equal);
+        assert_ver_order("_b", "+b", Ordering::Equal);
 
-        assert_eq!(Ordering::Equal, compare_version_string("+b", "++b"));
-        assert_eq!(Ordering::Equal, compare_version_string("+b", "+b+"));
+        assert_ver_order("+b", "++b", Ordering::Equal);
+        assert_ver_order("+b", "+b+", Ordering::Equal);
 
-        assert_eq!(Ordering::Equal, compare_version_string("+.", "+_"));
-        assert_eq!(Ordering::Equal, compare_version_string("_+", "+."));
-        assert_eq!(Ordering::Equal, compare_version_string("+", "."));
-        assert_eq!(Ordering::Equal, compare_version_string(",", "+"));
+        assert_ver_order("+.", "+_", Ordering::Equal);
+        assert_ver_order("_+", "+.", Ordering::Equal);
+        assert_ver_order("+", ".", Ordering::Equal);
+        assert_ver_order(",", "+", Ordering::Equal);
 
-        assert_eq!(Ordering::Equal, compare_version_string("++", "_"));
-        assert_eq!(Ordering::Equal, compare_version_string("+", ".."));
+        assert_ver_order("++", "_", Ordering::Equal);
+        assert_ver_order("+", "..", Ordering::Equal);
 
-        assert_eq!(Ordering::Equal, compare_version_string("4_0", "4_0"));
-        assert_eq!(Ordering::Equal, compare_version_string("4_0", "4.0"));
-        assert_eq!(Ordering::Equal, compare_version_string("4.0", "4_0"));
+        assert_ver_order("4_0", "4_0", Ordering::Equal);
+        assert_ver_order("4_0", "4.0", Ordering::Equal);
+        assert_ver_order("4.0", "4_0", Ordering::Equal);
 
-        assert_eq!(Ordering::Less, compare_version_string("4.999", "5.0"));
-        assert_eq!(Ordering::Less, compare_version_string("4.999.9", "5.0"));
-        assert_eq!(Ordering::Greater, compare_version_string("5.0", "4.999_9"));
+        assert_ver_order("4.999", "5.0", Ordering::Less);
+        assert_ver_order("4.999.9", "5.0", Ordering::Less);
+        assert_ver_order("5.0", "4.999_9", Ordering::Greater);
 
         // except when it comes to breaking up sequences of alphanumeric characters that do impact the comparison
-        assert_eq!(Ordering::Less, compare_version_string("4.999", "4.999.9"));
-        assert_eq!(Ordering::Greater, compare_version_string("4.999", "4.99.9"));
+        assert_ver_order("4.999", "4.999.9", Ordering::Less);
+        assert_ver_order("4.999", "4.99.9", Ordering::Greater);
     }
 
     /// Test handling of non-ascii characters
     #[test]
     fn test_non_ascii_character_equivalence() {
         // the existence of sequences of non-ascii characters should not impact the version comparison at all
-        assert_eq!(Ordering::Equal, compare_version_string("1.1.Á.1", "1.1.1"));
-        assert_eq!(Ordering::Equal, compare_version_string("1.1.Á", "1.1.Á"));
-        assert_eq!(Ordering::Equal, compare_version_string("1.1.Á", "1.1.Ê"));
-        assert_eq!(Ordering::Equal, compare_version_string("1.1.ÁÁ", "1.1.Á"));
-        assert_eq!(Ordering::Equal, compare_version_string("1.1.Á", "1.1.ÊÊ"));
+        assert_ver_order("1.1.Á.1", "1.1.1", Ordering::Equal);
+        assert_ver_order("1.1.Á", "1.1.Á", Ordering::Equal);
+        assert_ver_order("1.1.Á", "1.1.Ê", Ordering::Equal);
+        assert_ver_order("1.1.ÁÁ", "1.1.Á", Ordering::Equal);
+        assert_ver_order("1.1.Á", "1.1.ÊÊ", Ordering::Equal);
 
         // except when it comes to breaking up sequences of ascii characters that do impact the comparison
-        assert_eq!(Ordering::Less, compare_version_string("1.1Á1", "1.11"));
+        assert_ver_order("1.1Á1", "1.11", Ordering::Less);
     }
 
     /// Test that Hash is consistent with PartialEq (equal values must hash the same)

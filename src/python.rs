@@ -95,6 +95,14 @@ impl PyEvr {
     fn evr_short(&self) -> String {
         self.0.to_string()
     }
+
+    /// Return a memcmp-sortable binary key encoding this EVR.
+    ///
+    /// Comparing the returned bytes with standard comparison produces
+    /// correct RPM version ordering, matching `rpmvercmp()` semantics.
+    fn sortkey<'py>(&self, py: Python<'py>) -> Bound<'py, pyo3::types::PyBytes> {
+        pyo3::types::PyBytes::new(py, self.0.sortkey().as_bytes())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -365,6 +373,52 @@ impl PyRequirement {
 }
 
 // ---------------------------------------------------------------------------
+// EvrSortKey
+// ---------------------------------------------------------------------------
+
+/// Namespace for creating memcmp-sortable binary sort keys from EVR data.
+///
+/// The returned `bytes` produce correct RPM version ordering when compared
+/// byte-by-byte, matching the semantics of `rpmvercmp()`.
+///
+/// This property is extremely useful, because it means that the value can be stored
+/// in a database and used to perform in-database RPM version comparisons, provided
+/// the database is capable of memcmp-style order comparisons across collections
+/// of raw bytes.
+///
+/// This class has no constructor; use the classmethods instead.
+#[pyclass(name = "EvrSortKey", frozen)]
+pub struct PyEvrSortKey;
+
+#[pymethods]
+impl PyEvrSortKey {
+    /// Create a sortkey from individual epoch, version, and release strings.
+    #[classmethod]
+    #[pyo3(signature = (epoch, version, release))]
+    fn from_values<'py>(
+        _cls: &Bound<'_, PyType>,
+        py: Python<'py>,
+        epoch: Option<&str>,
+        version: &str,
+        release: &str,
+    ) -> Bound<'py, pyo3::types::PyBytes> {
+        let key = crate::EvrSortKey::from_values(epoch.unwrap_or(""), version, release);
+        pyo3::types::PyBytes::new(py, key.as_bytes())
+    }
+
+    /// Parse an EVR string (e.g. ``"1:2.3.4-5"``) and return its sortkey.
+    #[classmethod]
+    fn parse<'py>(
+        _cls: &Bound<'_, PyType>,
+        py: Python<'py>,
+        evr: &str,
+    ) -> Bound<'py, pyo3::types::PyBytes> {
+        let key = crate::EvrSortKey::parse(evr);
+        pyo3::types::PyBytes::new(py, key.as_bytes())
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Module-level functions
 // ---------------------------------------------------------------------------
 
@@ -414,6 +468,17 @@ fn nevra_sort(nevras: Vec<String>) -> Vec<String> {
     parsed.into_iter().map(|(_, i)| nevras[i].clone()).collect()
 }
 
+/// Encode a version or release string as a memcmp-sortable binary key.
+///
+/// This encodes a single version/release component. For a full EVR key,
+/// use `EvrSortKey.parse()` instead.
+#[pyfunction]
+#[pyo3(name = "version_sortkey")]
+fn py_version_sortkey<'py>(py: Python<'py>, version: &str) -> Bound<'py, pyo3::types::PyBytes> {
+    let key = crate::version_sortkey(version);
+    pyo3::types::PyBytes::new(py, &key)
+}
+
 // ---------------------------------------------------------------------------
 // Module registration
 // ---------------------------------------------------------------------------
@@ -427,9 +492,11 @@ pub fn rpm_version(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyNevra>()?;
     m.add_class::<PyReqOperator>()?;
     m.add_class::<PyRequirement>()?;
+    m.add_class::<PyEvrSortKey>()?;
     m.add_function(wrap_pyfunction!(evr_compare, m)?)?;
     m.add_function(wrap_pyfunction!(evr_sort, m)?)?;
     m.add_function(wrap_pyfunction!(nevra_sort, m)?)?;
+    m.add_function(wrap_pyfunction!(py_version_sortkey, m)?)?;
 
     Ok(())
 }

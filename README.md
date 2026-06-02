@@ -50,6 +50,17 @@ let req = Requirement::with_constraint("foo", ReqOperator::Ge, Evr::parse("2.0-1
 assert!(req.satisfies("foo", &Evr::parse("2.0-1")));
 assert!(req.satisfies("foo", &Evr::parse("3.0-1")));
 assert!(!req.satisfies("foo", &Evr::parse("1.0-1")));
+
+// Sort keys: encode RPM version ordering into raw bytes.
+// Useful in databases (in-database RPM version ordering)
+use rpm_version::EvrSortKey;
+let key_a = EvrSortKey::from_values("1", "2.0", "3.fc40");
+let key_b = EvrSortKey::parse("1:3.0-1.fc40");
+assert!(key_a < key_b);
+// Evr::sortkey() returns the same thing
+assert_eq!(Evr::parse("1:2.0-3.fc40").sortkey(), key_a);
+// Convert to Vec<u8> for storage
+let bytes: Vec<u8> = key_a.into();
 ```
 
 ### In Python
@@ -95,4 +106,15 @@ assert not req.satisfies("foo", Evr.parse("1.0-1"))
 
 # String operators also work
 req = Requirement("foo", ">=", Evr.parse("2.0-1"))
+
+# Sort keys: encode RPM version ordering into raw bytes.
+# Useful in databases (in-database RPM version ordering)
+from rpm_version import EvrSortKey
+key_a = EvrSortKey.from_values("1", "2.0", "3.fc40")
+key_b = EvrSortKey.parse("1:3.0-1.fc40")
+assert key_a < key_b
+# Evr.sortkey() returns the same thing
+assert Evr.parse("1:2.0-3.fc40").sortkey() == key_a
+# Use as a sort key for sorted()
+sorted(["2.0-1", "1:0.1-1", "1.0-1"], key=EvrSortKey.parse)
 ```

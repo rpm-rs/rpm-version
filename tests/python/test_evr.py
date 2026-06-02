@@ -32,11 +32,11 @@ class TestEvr:
 
     def test_normalized_form(self):
         e = Evr("", "1.0", "1")
-        assert e.nevra() == "0:1.0-1"
+        assert e.evr() == "0:1.0-1"
 
     def test_normalized_form_with_epoch(self):
         e = Evr("2", "1.0", "1")
-        assert e.nevra() == "2:1.0-1"
+        assert e.evr() == "2:1.0-1"
 
     def test_ordering(self):
         a = Evr.parse("1.0-1")
@@ -116,13 +116,11 @@ class TestNevra:
         n = Nevra.parse("foo-1:2.3-4.x86_64")
         assert n.nvra() == "foo-2.3-4.x86_64"
 
-    def test_nvra_short(self):
+    def test_nevra_short(self):
         n = Nevra.parse("foo-1:2.3-4.x86_64")
-        assert n.nvra() == "foo-1:2.3-4.x86_64"
+        assert n.nevra_short() == "foo-1:2.3-4.x86_64"
         n = Nevra.parse("foo-2.3-4.x86_64")
-        assert n.nvra() == "foo-2.3-4.x86_64"
-        n = Nevra.parse("foo-1:2.3-4.x86_64")
-        assert n.nvra() == "foo-2.3-4.x86_64"
+        assert n.nevra_short() == "foo-2.3-4.x86_64"
 
     def test_evr(self):
         n = Nevra.parse("foo-1:2.3-4.x86_64")

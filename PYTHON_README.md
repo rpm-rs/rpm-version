@@ -46,4 +46,15 @@ assert not req.satisfies("foo", Evr.parse("1.0-1"))
 
 # String operators also work
 req = Requirement("foo", ">=", Evr.parse("2.0-1"))
+
+# Sort keys: encode RPM version ordering into raw bytes.
+# Useful in databases (in-database RPM version ordering)
+from rpm_version import EvrSortKey
+key_a = EvrSortKey.from_values("1", "2.0", "3.fc40")
+key_b = EvrSortKey.parse("1:3.0-1.fc40")
+assert key_a < key_b
+# Evr.sortkey() returns the same thing
+assert Evr.parse("1:2.0-3.fc40").sortkey() == key_a
+# Use as a sort key for sorted()
+sorted(["2.0-1", "1:0.1-1", "1.0-1"], key=EvrSortKey.parse)
 ```
