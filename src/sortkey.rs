@@ -2,7 +2,13 @@
 //! The returned `Vec<u8>` produces correct RPM version ordering when compared
 //! byte-by-byte (memcmp-style), matching the semantics of `rpmvercmp()`.
 //!
-//! Unlike the `Evr` struct which uses a traditional approach to
+//! Unlike the `Evr` struct which uses a traditional procedural approach to
+//! determining the order, this approach produces a single value that can be
+//! utilized to order RPM versions from any programming language or database that
+//! can use memcmp semantics on byte array values.
+//!
+//! It also tends to be faster in e.g. Python because it can completely avoid FFI
+//! overhead.
 //!
 //! The key is structured as: [4-byte epoch] [version sortkey] [release sortkey]
 //!
