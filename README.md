@@ -57,7 +57,7 @@ assert!(req.satisfies("foo", &Evr::parse("2.0-1")));
 assert!(req.satisfies("foo", &Evr::parse("3.0-1")));
 assert!(!req.satisfies("foo", &Evr::parse("1.0-1")));
 
-// Sort keys: encode RPM version ordering into raw bytes.
+// Sort keys: encode RPM version ordering into a raw byte key which allows memcmp-based comparisons
 // Useful in databases (in-database RPM version ordering)
 use rpm_version::EvrSortKey;
 let key_a = EvrSortKey::from_values("1", "2.0", "3.fc40");
@@ -123,4 +123,6 @@ assert key_a < key_b
 assert Evr.parse("1:2.0-3.fc40").sortkey() == key_a
 # Use as a sort key for sorted()
 sorted(["2.0-1", "1:0.1-1", "1.0-1"], key=EvrSortKey.parse)
+# it's just a byte string, which can be stored in a DB directly and compared using memcmp semantics
+assert type(key_a) == bytes
 ```
