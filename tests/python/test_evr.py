@@ -52,6 +52,15 @@ class TestEvr:
         assert a == b
         assert not (a != b)
 
+    def test_equality_follows_ordering(self):
+        """EVRs that RPM sorts as equal, such as 1.01-1 and 1.1-1, are equal and hash the same."""
+        a = Evr.parse("1.01-1")
+        b = Evr.parse("1.1-1")
+        assert not (a < b) and not (a > b)
+        assert a == b
+        assert hash(a) == hash(b)
+        assert len({a, b}) == 1
+
     def test_epoch_comparison(self):
         a = Evr.parse("1:1.0-1")
         b = Evr.parse("2:1.0-1")
@@ -138,6 +147,14 @@ class TestNevra:
         a = Nevra.parse("foo-1.0-1.x86_64")
         b = Nevra.parse("foo-1.0-1.x86_64")
         assert a == b
+
+    def test_names_differing_in_separators(self):
+        """foo-bar and foo_bar are different packages, so they must not sort as equal."""
+        a = Nevra.parse("foo-bar-1.0-1.x86_64")
+        b = Nevra.parse("foo_bar-1.0-1.x86_64")
+        assert a != b
+        assert a < b
+        assert sorted([b, a]) == [a, b]
 
 
 class TestEvrSort:

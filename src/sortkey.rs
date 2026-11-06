@@ -42,7 +42,11 @@
 //!     Leading zeros are stripped. The length byte sorts first, so longer digit
 //!     strings (= larger numbers) always sort after shorter ones. Within the
 //!     same length, digit characters compare lexicographically, which is correct
-//!     for same-length decimal integers.
+//!     for same-length decimal integers. A segment of more than 255 digits,
+//!     whose length doesn't fit the byte, uses \xff \xff + its length as an
+//!     8-byte big-endian integer instead. A 255-digit segment has \xff followed
+//!     by a digit, which is lower than \xff, so longer segments still sort
+//!     after it.
 //!
 //! Each version/release component ends with \x02 (end-of-version). When two
 //! versions are equal, the comparison naturally falls through the end marker
@@ -146,13 +150,18 @@ impl AsRef<[u8]> for EvrSortKey {
 ///
 /// See [`evr_sortkey`] for the full EVR encoding.
 pub fn version_sortkey(ver: &str) -> Vec<u8> {
-    if ver.is_empty() {
-        return vec![0x02];
-    }
+    let mut result = Vec::with_capacity(ver.len() * 2 + 1);
+    encode_version(ver, |bytes| result.extend_from_slice(bytes));
+    result
+}
 
+/// Pass the [`version_sortkey`] encoding of `ver` to `emit`, piece by piece.
+///
+/// Versions that compare as equal have the same encoding, so `Hash for Evr`
+/// hashes these pieces to stay consistent with `Ord` without allocating.
+pub(crate) fn encode_version(ver: &str, mut emit: impl FnMut(&[u8])) {
     let bytes = ver.as_bytes();
     let len = bytes.len();
-    let mut result = Vec::with_capacity(len * 2);
     let mut pos = 0;
 
     while pos < len {
@@ -172,13 +181,13 @@ pub fn version_sortkey(ver: &str) -> Vec<u8> {
         let b = bytes[pos];
 
         if b == b'~' {
-            result.push(0x01);
+            emit(&[0x01]);
             pos += 1;
             continue;
         }
 
         if b == b'^' {
-            result.push(0x03);
+            emit(&[0x03]);
             pos += 1;
             continue;
         }
@@ -194,21 +203,26 @@ pub fn version_sortkey(ver: &str) -> Vec<u8> {
                 .position(|&c| c != b'0')
                 .map(|i| &segment[i..])
                 .unwrap_or(b"");
-            result.push(0x05);
-            result.push(stripped.len() as u8);
-            result.extend_from_slice(stripped);
-            result.push(0x00);
+            emit(&[0x05]);
+            match u8::try_from(stripped.len()) {
+                Ok(digit_count) => emit(&[digit_count]),
+                Err(_) => {
+                    emit(&[0xff, 0xff]);
+                    emit(&(stripped.len() as u64).to_be_bytes());
+                }
+            }
+            emit(stripped);
+            emit(&[0x00]);
         } else {
             let start = pos;
             while pos < len && bytes[pos].is_ascii_alphabetic() {
                 pos += 1;
             }
-            result.push(0x04);
-            result.extend_from_slice(&bytes[start..pos]);
-            result.push(0x00);
+            emit(&[0x04]);
+            emit(&bytes[start..pos]);
+            emit(&[0x00]);
         }
     }
 
-    result.push(0x02);
-    result
+    emit(&[0x02]);
 }

@@ -110,3 +110,8 @@ class TestVersionSortkey:
 
     def test_non_ascii_ignored(self):
         assert version_sortkey("1.1.Á.1") == version_sortkey("1.1.1")
+
+    def test_long_numeric_segments(self):
+        """Numeric segments of more than 255 digits still sort by their value."""
+        assert version_sortkey("1" * 256) > version_sortkey("2")
+        assert version_sortkey("9" * 255) < version_sortkey("1" * 256)
