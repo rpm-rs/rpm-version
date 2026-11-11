@@ -5,6 +5,8 @@ use std::hash::{Hash, Hasher};
 
 #[cfg(feature = "python")]
 pub mod python;
+#[cfg(feature = "ruby")]
+pub mod ruby;
 
 mod sortkey;
 pub use sortkey::*;

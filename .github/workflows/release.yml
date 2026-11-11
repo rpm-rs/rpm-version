@@ -55,6 +55,48 @@ jobs:
           name: wheels-sdist
           path: dist/*.tar.gz
 
+  build-rubygem:
+    name: Build RubyGem
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+      - uses: dtolnay/rust-toolchain@stable
+      - run: mkdir -p dist
+      - run: gem build rpm-version.gemspec --output dist/rpm-version.gem
+      - name: Install and smoke-test the gem
+        env:
+          GEM_HOME: ${{ runner.temp }}/rpm-version-gems
+          GEM_PATH: ${{ runner.temp }}/rpm-version-gems
+        run: |
+          mkdir -p "$GEM_HOME"
+          gem install --no-document dist/rpm-version.gem
+          ruby -e 'require "rpm_version"; abort unless RPMVersion.evr_compare("1.0-1", "2.0-1") == -1'
+      - uses: actions/upload-artifact@v7
+        with:
+          name: rubygem
+          path: dist/*.gem
+
+  publish-rubygems:
+    name: Publish to RubyGems
+    runs-on: ubuntu-latest
+    needs: [build-rubygem]
+    environment: Release
+    permissions:
+      id-token: write
+    steps:
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+      - uses: actions/download-artifact@v8
+        with:
+          name: rubygem
+          path: dist/
+      - uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a # v2.1.0
+      - run: gem push dist/rpm-version.gem
+
   publish-pypi:
     name: Publish to PyPI
     runs-on: ubuntu-latest

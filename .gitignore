@@ -1,3 +1,5 @@
 /target
 **/__pycache__/
-Cargo.lock
+/ruby/lib/rpm_version/*.so
+/ruby/lib/rpm_version/*.bundle
+/ruby/lib/rpm_version/*.dll

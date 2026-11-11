@@ -82,6 +82,26 @@ jobs:
       - run: pip install dist/*.whl pytest
       - run: pytest tests/python/
 
+  ruby-tests:
+    name: Ruby Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+      - run: gem build rpm-version.gemspec --output /tmp/rpm-version.gem
+      - name: Install and test the gem
+        env:
+          GEM_HOME: ${{ runner.temp }}/rpm-version-gems
+          GEM_PATH: ${{ runner.temp }}/rpm-version-gems
+        run: |
+          mkdir -p "$GEM_HOME"
+          gem install --no-document minitest
+          gem install --no-document /tmp/rpm-version.gem
+          ruby tests/ruby/run.rb
+
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
