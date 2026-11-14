@@ -3,3 +3,4 @@
 /ruby/lib/rpm_version/*.so
 /ruby/lib/rpm_version/*.bundle
 /ruby/lib/rpm_version/*.dll
+Cargo.lock

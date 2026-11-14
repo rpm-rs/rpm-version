@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added Ruby bindings for EVR, NEVRA, requirements, and version sorting
 
+## 0.5.2
+
+- Bump PyO3 dependency version
+
 ## 0.5.1
 
 - Bump PyO3 dependency version
