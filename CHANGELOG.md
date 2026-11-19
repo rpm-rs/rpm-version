@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 - Added Ruby bindings for EVR, NEVRA, requirements, and version sorting
+- Python: Added type stubs and a `py.typed` marker
 
 ## 0.5.2
 

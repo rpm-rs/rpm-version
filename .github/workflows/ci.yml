@@ -79,8 +79,9 @@ jobs:
         with:
           args: --release --out dist
           manylinux: 2_28
-      - run: pip install dist/*.whl pytest
+      - run: pip install dist/*.whl pytest mypy
       - run: pytest tests/python/
+      - run: python -m mypy.stubtest rpm_version --allowlist stubtest_allowlist.txt
 
   ruby-tests:
     name: Ruby Tests
