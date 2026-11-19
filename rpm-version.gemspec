@@ -18,7 +18,6 @@ Gem::Specification.new do |spec|
   spec.metadata["changelog_uri"] = "https://github.com/rpm-rs/rpm-version/blob/master/CHANGELOG.md"
 
   spec.files = [
-    "Cargo.lock",
     "Cargo.toml",
     "LICENSE",
     "RUBY_README.md",
