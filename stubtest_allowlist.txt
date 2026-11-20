@@ -1,0 +1,2 @@
+# Internal extension module re-exported by the maturin-generated __init__.py
+rpm_version.rpm_version
